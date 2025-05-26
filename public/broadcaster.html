@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Broadcaster</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="bg-gray-100 flex flex-col items-center p-6">
+  <h1 class="text-3xl font-bold mb-6">Live Broadcast</h1>
+  <video id="localVideo" autoplay muted class="w-full max-w-2xl bg-black rounded shadow"></video>
+  <div class="mt-4 space-x-2">
+    <button id="startBtn" class="px-4 py-2 bg-blue-600 text-white rounded">Start Broadcast</button>
+    <button id="stopBtn" class="px-4 py-2 bg-red-600 text-white rounded disabled:opacity-50" disabled>Stop Broadcast</button>
+  </div>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
