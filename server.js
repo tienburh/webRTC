@@ -60,5 +60,5 @@ io.on('connection', socket => {
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
-  console.log(`\n✅ Server is running! Access it at: http://localhost:${PORT}/\n`);
+  console.log(`\n✅ Server is running! Access it at: https://webrtc-qlql.onrender.com//\n`);
 });
