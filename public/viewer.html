@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-gray-100 flex flex-col items-center p-6">
-  <h1 class="text-3xl font-bold mb-6">Live Viewer</h1>
+  <h1 class="text-3xl font-bold mb-6">Viewing Drone Cam</h1>
   <video id="remoteVideo" autoplay playsinline controls class="w-full max-w-2xl bg-black rounded shadow"></video>
   <p id="status" class="mt-4 text-gray-700">Initializing...</p>
 
@@ -26,7 +26,7 @@
     // Khi socket sẵn sàng, gửi watcher
     socket.on('connect', () => {
       console.log('Emitting watcher');
-      status.textContent = 'Connecting to broadcast...';
+      status.textContent = 'Connecting to drone camera...';
       socket.emit('watcher');
     });
 
