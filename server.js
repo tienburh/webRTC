@@ -1,33 +1,33 @@
-// Import các thư viện cần thiết
+// Import cac thu vien can thiet
 const express  = require('express');
 const http     = require('http');
 const path     = require('path');
 const socketIO = require('socket.io');
 
-const app    = express(); //Tạo ứng dụng Express.
-const server = http.createServer(app); //Tạo HTTP server từ Express
-const io     = socketIO(server); //Khởi tạo Socket.IO để gắn với HTTP server (giúp giao tiếp WebSocket giữa client và server).
+const app    = express(); // Tao ung dung Express
+const server = http.createServer(app); // Tao HTTP server tu Express
+const io     = socketIO(server); // Khoi tao Socket.IO de gan voi HTTP server (giao tiep WebSocket giua client va server)
 
 
-// Serve các file tĩnh trong thư mục "public"
+// Phuc vu cac file tinh trong thu muc "public"
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Đường dẫn chính trả về index.html
+// Duong dan chinh tra ve index.html
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 
-let broadcaster;  // Lưu lại socket ID của broadcaster hiện tại
+let broadcaster;  // Luu lai socket ID cua broadcaster hien tai
 
 io.on('connection', socket => {
   console.log(`🔌 New connection: ${socket.id}`);
 
   socket.on('broadcaster', () => {
-    broadcaster = socket.id;  // Lưu socket ID của broadcaster
+    broadcaster = socket.id;  // Luu socket ID cua broadcaster
     console.log(`🎥 Broadcaster ready: ${broadcaster}`);
 
-    // Gửi thông báo cho tất cả các watcher đang kết nối rằng broadcaster đã sẵn sàng
+    // Gui thong bao cho tat ca cac watcher dang ket noi rang broadcaster da san sang
     socket.broadcast.emit('broadcaster');
   });
 
@@ -35,7 +35,7 @@ io.on('connection', socket => {
   socket.on('watcher', () => {
     console.log(`👀 Watcher connected: ${socket.id}`);
     if (broadcaster) {
-      // Gửi sự kiện đến broadcaster với ID của watcher
+      // Gui su kien den broadcaster voi ID cua watcher
       io.to(broadcaster).emit('watcher', socket.id);
     } else {
       console.log('⚠ No broadcaster found when watcher connected.');
@@ -61,13 +61,13 @@ io.on('connection', socket => {
   socket.on('disconnect', () => {
     console.log(`❌ Disconnected: ${socket.id}`);
 
-    // Nếu broadcaster rời đi, reset biến
+    // Neu broadcaster roi di, reset bien
     if (socket.id === broadcaster) {
       broadcaster = null;
       console.log('⚠ Broadcaster disconnected.');
     }
 
-    // Thông báo cho các client còn lại rằng một peer đã rời khỏi
+    // Thong bao cho cac client con lai rang mot peer da roi khoi
     socket.broadcast.emit('disconnectPeer', socket.id);
   });
 });
