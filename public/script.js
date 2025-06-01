@@ -20,71 +20,124 @@ const joinBtn     = document.getElementById('joinBtn');      // nut tham gia xem
 if (startBtn) {
   console.log('▶ Found startBtn, attaching handler');
 
-  // Khi nhan Start
   startBtn.addEventListener('click', async () => {
     console.log('>> Start clicked');
     try {
-      // Yeu cau quyen truy cap camera va micro
+      // Yêu cầu quyền truy cập camera và micro
       console.log('>> Requesting camera...');
       const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
       console.log('<< Camera OK:', stream);
 
-      // Hien thi luong video local
-      localVideo.srcObject = stream;
+      // Lấy track video gốc
+      const videoTrack = stream.getVideoTracks()[0];
 
-      // Gui thong bao len server la nguoi dung nay la broadcaster
+      // Tạo video ẩn để phát video gốc (không thêm vào DOM)
+      const hiddenVideo = document.createElement('video');
+      hiddenVideo.srcObject = new MediaStream([videoTrack]);
+      hiddenVideo.muted = true;
+      hiddenVideo.play();
+
+      // Tạo canvas để vẽ video đã lật ngang
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+
+      // Khi video đã có kích thước, thiết lập canvas size
+      hiddenVideo.addEventListener('loadedmetadata', () => {
+        canvas.width = hiddenVideo.videoWidth;
+        canvas.height = hiddenVideo.videoHeight;
+
+        // Hàm vẽ liên tục video đã lật ngang lên canvas
+        function draw() {
+          ctx.save();
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // Lật ngang (mirror)
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+
+          ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+          ctx.restore();
+
+          requestAnimationFrame(draw);
+        }
+        draw();
+      });
+
+      // Tạo stream từ canvas
+      const canvasStream = canvas.captureStream(30); // fps 30
+
+      // Thêm track audio từ stream gốc vào canvasStream (nếu có)
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length > 0) {
+        canvasStream.addTrack(audioTracks[0]);
+      }
+
+      // Hiển thị stream canvas (đã lật) lên video local
+      localVideo.srcObject = canvasStream;
+
+      // Gửi thông báo lên server là broadcaster
       socket.emit('broadcaster');
 
-      // Vo hieu hoa nut Start, bat nut Stop
+      // Lưu stream đã lật để dùng cho peer connection
+      window._broadcastStream = canvasStream;
+
+      // Vô hiệu hóa nút Start, bật nút Stop
       startBtn.disabled = true;
       stopBtn.disabled = false;
+
     } catch (err) {
       console.error('❌ getUserMedia error:', err);
-      alert('Loi khi truy cap camera: ' + err.name + ' – ' + err.message);
+      alert('Lỗi khi truy cập camera: ' + err.name + ' – ' + err.message);
     }
   });
 
-  // Khi nhan Stop thi reload lai trang
+  // Khi nhấn Stop thì reload lại trang
   stopBtn?.addEventListener('click', () => window.location.reload());
 
-  // Khi co viewer ket noi (server gui ve socket ID cua viewer)
+  // Khi có viewer kết nối (server gửi socket ID của viewer)
   socket.on('watcher', async id => {
     console.log('📡 Watcher connected:', id);
 
-    // Tao peer connection moi cho viewer
+    // Tạo peer connection mới cho viewer
     const pc = new RTCPeerConnection(config);
     peerConnections[id] = pc;
 
-    // Them track tu stream local vao peer connection
-    const stream = localVideo.srcObject;
+    // Lấy stream đã lật ngang
+    const stream = window._broadcastStream;
+    if (!stream) {
+      console.warn('⚠️ No broadcast stream found!');
+      return;
+    }
+
+    // Thêm các track của stream vào peer connection
     stream.getTracks().forEach(track => pc.addTrack(track, stream));
 
-    // Gui ICE candidate cho viewer
+    // Gửi ICE candidate cho viewer
     pc.onicecandidate = event => {
       if (event.candidate) {
         socket.emit('candidate', id, event.candidate);
       }
     };
 
-    // Tao offer va gui cho viewer
+    // Tạo offer và gửi cho viewer
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
     socket.emit('offer', id, pc.localDescription);
   });
 
-  // Khi nhan answer tu viewer
+  // Khi nhận answer từ viewer
   socket.on('answer', (id, description) => {
     console.log('📨 Received answer from', id);
     peerConnections[id]?.setRemoteDescription(description);
   });
 
-  // Khi nhan ICE candidate tu viewer
+  // Khi nhận ICE candidate từ viewer
   socket.on('candidate', (id, candidate) => {
     console.log('📨 Received ICE candidate from', id);
     peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
   });
 
-  // Khi viewer ngat ket noi
+  // Khi viewer ngắt kết nối
   socket.on('disconnectPeer', id => {
     console.log('❌ Viewer disconnected:', id);
     peerConnections[id]?.close();
@@ -94,35 +147,34 @@ if (startBtn) {
 
 // --- Viewer ---
 if (joinBtn) {
-  // Khi nhan Join thi gui tin hieu len server la muon xem
-  joinBtn.addEventListener('click', () => socket.emit('watcher'));
+  joinBtn.addEventListener('click', () => {
+    socket.emit('watcher');
+  });
 
-  // Khi nhan duoc offer tu broadcaster
+  // Khi nhận offer từ broadcaster
   socket.on('offer', async (id, desc) => {
-    // Tao peer connection moi va luu lai
     const pc = new RTCPeerConnection(config);
     peerConnections[id] = pc;
 
-    // Thiet lap mo ta tu xa (offer)
     await pc.setRemoteDescription(desc);
 
-    // Tao answer va gui lai cho broadcaster
     const answer = await pc.createAnswer();
     await pc.setLocalDescription(answer);
     socket.emit('answer', id, answer);
 
-    // Khi nhan duoc stream tu broadcaster
+    // Nhận stream từ broadcaster
     pc.ontrack = e => {
-      remoteVideo.srcObject = e.streams[0];
+      if (remoteVideo) {
+        remoteVideo.srcObject = e.streams[0];
+      }
     };
 
-    // Gui ICE candidate cho broadcaster
     pc.onicecandidate = e => {
       if (e.candidate) socket.emit('candidate', id, e.candidate);
     };
   });
 
-  // Khi nhan ICE candidate tu broadcaster
+  // Khi nhận ICE candidate từ broadcaster
   socket.on('candidate', (id, candidate) => {
     peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
   });
