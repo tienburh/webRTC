@@ -42,13 +42,15 @@
         }
       };
 
-      pc.ontrack = e => {
-        if (!remoteVideo.srcObject) {
-          remoteVideo.srcObject = e.streams[0];
-          status.textContent = 'Live';
-        }
-      };
-
+   pc.ontrack = e => {
+  if (!remoteVideo.srcObject) {
+    remoteVideo.srcObject = e.streams[0];
+    status.textContent = 'Live';
+    remoteVideo.play().catch(err => {
+      console.warn('Video play error:', err);
+    });
+  }
+};
       await pc.setRemoteDescription(description);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
