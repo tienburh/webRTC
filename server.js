@@ -1,78 +1,182 @@
-// Import cac thu vien can thiet
-const express  = require('express');
-const http     = require('http');
-const path     = require('path');
-const socketIO = require('socket.io');
+// Khoi tao socket.io client de ket noi voi signaling server
+const socket = io();
 
-const app    = express(); // Tao ung dung Express
-const server = http.createServer(app); // Tao HTTP server tu Express
-const io     = socketIO(server); // Khoi tao Socket.IO de gan voi HTTP server (giao tiep WebSocket giua client va server)
+// Luu cac peer connections voi cac viewer, key la socket ID
+const peerConnections = {};
 
+// Cau hinh ICE Server, o day su dung STUN server cua Google
+const config = { 
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+};
 
-// Phuc vu cac file tinh trong thu muc "public"
-app.use(express.static(path.join(__dirname, 'public')));
+// === Tham chieu den cac phan tu HTML ===
+const localVideo  = document.getElementById('localVideo');   // video hien thi camera local
+const remoteVideo = document.getElementById('remoteVideo');  // video hien thi luong nhan tu nguoi khac
+const startBtn    = document.getElementById('startBtn');     // nut bat dau truyen (broadcaster)
+const stopBtn     = document.getElementById('stopBtn');      // nut dung truyen
+const joinBtn     = document.getElementById('joinBtn');      // nut tham gia xem (viewer)
 
-// Duong dan chinh tra ve index.html
-app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
+// --- Broadcaster ---
+if (startBtn) {
+  console.log('▶ Found startBtn, attaching handler');
 
+  startBtn.addEventListener('click', async () => {
+    console.log('>> Start clicked');
+    try {
+      console.log('>> Requesting camera...');
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+      console.log('<< Camera OK:', stream);
 
-let broadcaster;  // Luu lai socket ID cua broadcaster hien tai
+      // Lấy track video gốc
+      const videoTrack = stream.getVideoTracks()[0];
 
-io.on('connection', socket => {
-  console.log(`🔌 New connection: ${socket.id}`);
+      // Tạo video ẩn để phát video gốc (không thêm vào DOM)
+      const hiddenVideo = document.createElement('video');
+      hiddenVideo.srcObject = new MediaStream([videoTrack]);
+      hiddenVideo.muted = true;
 
-  socket.on('broadcaster', () => {
-    broadcaster = socket.id;  // Luu socket ID cua broadcaster
-    console.log(`🎥 Broadcaster ready: ${broadcaster}`);
+      // Tạo canvas để vẽ video đã lật ngang
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
 
-    // Gui thong bao cho tat ca cac watcher dang ket noi rang broadcaster da san sang
-    socket.broadcast.emit('broadcaster');
-  });
+      // Chờ video metadata load xong và video bắt đầu play
+      hiddenVideo.addEventListener('loadedmetadata', async () => {
+        canvas.width = hiddenVideo.videoWidth;
+        canvas.height = hiddenVideo.videoHeight;
 
+        try {
+          await hiddenVideo.play();
+          console.log('Hidden video playing');
+        } catch(err) {
+          console.warn('Could not autoplay hidden video:', err);
+        }
 
-  socket.on('watcher', () => {
-    console.log(`👀 Watcher connected: ${socket.id}`);
-    if (broadcaster) {
-      // Gui su kien den broadcaster voi ID cua watcher
-      io.to(broadcaster).emit('watcher', socket.id);
-    } else {
-      console.log('⚠ No broadcaster found when watcher connected.');
+        // Hàm vẽ liên tục video đã lật ngang lên canvas
+        function draw() {
+          ctx.save();
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          ctx.translate(canvas.width, 0);
+          ctx.scale(-1, 1);
+
+          ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
+          ctx.restore();
+
+          requestAnimationFrame(draw);
+        }
+        draw();
+      });
+
+      // Tạo stream từ canvas
+      const canvasStream = canvas.captureStream(30); // fps 30
+
+      // Thêm track audio từ stream gốc vào canvasStream (nếu có)
+      const audioTracks = stream.getAudioTracks();
+      if (audioTracks.length > 0) {
+        canvasStream.addTrack(audioTracks[0]);
+      }
+
+      // Hiển thị stream canvas (đã lật) lên video local
+      localVideo.srcObject = canvasStream;
+
+      // Gửi thông báo lên server là broadcaster
+      socket.emit('broadcaster');
+
+      // Lưu stream đã lật để dùng cho peer connection
+      window._broadcastStream = canvasStream;
+
+      // Vô hiệu hóa nút Start, bật nút Stop
+      startBtn.disabled = true;
+      stopBtn.disabled = false;
+
+    } catch (err) {
+      console.error('❌ getUserMedia error:', err);
+      alert('Lỗi khi truy cập camera: ' + err.name + ' – ' + err.message);
     }
   });
 
+  // Khi nhấn Stop thì reload lại trang
+  stopBtn?.addEventListener('click', () => window.location.reload());
 
-  socket.on('offer', (id, description) => {
-    console.log(`📨 Offer from ${socket.id} to ${id}`);
-    socket.to(id).emit('offer', socket.id, description);
+  // Khi có viewer kết nối (server gửi socket ID của viewer)
+  socket.on('watcher', async id => {
+    console.log('📡 Watcher connected:', id);
+
+    // Tạo peer connection mới cho viewer
+    const pc = new RTCPeerConnection(config);
+    peerConnections[id] = pc;
+
+    // Lấy stream đã lật ngang
+    const stream = window._broadcastStream;
+    if (!stream) {
+      console.warn('⚠️ No broadcast stream found!');
+      return;
+    }
+
+    // Thêm các track của stream vào peer connection
+    stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+    // Gửi ICE candidate cho viewer
+    pc.onicecandidate = event => {
+      if (event.candidate) {
+        socket.emit('candidate', id, event.candidate);
+      }
+    };
+
+    // Tạo offer và gửi cho viewer
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit('offer', id, pc.localDescription);
   });
 
+  // Khi nhận answer từ viewer
   socket.on('answer', (id, description) => {
-    console.log(`📨 Answer from ${socket.id} to ${id}`);
-    socket.to(id).emit('answer', socket.id, description);
+    console.log('📨 Received answer from', id);
+    peerConnections[id]?.setRemoteDescription(description);
+  });
+
+  // Khi nhận ICE candidate từ viewer
+  socket.on('candidate', (id, candidate) => {
+    console.log('📨 Received ICE candidate from', id);
+    peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
+  });
+
+  // Khi viewer ngắt kết nối
+  socket.on('disconnectPeer', id => {
+    console.log('❌ Viewer disconnected:', id);
+    peerConnections[id]?.close();
+    delete peerConnections[id];
+  });
+}
+
+// --- Viewer ---
+if (joinBtn) {
+  joinBtn.addEventListener('click', () => {
+    socket.emit('watcher');
+  });
+
+  socket.on('offer', async (id, desc) => {
+    const pc = new RTCPeerConnection(config);
+    peerConnections[id] = pc;
+
+    await pc.setRemoteDescription(desc);
+
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    socket.emit('answer', id, answer);
+
+    pc.ontrack = e => {
+      if (remoteVideo) {
+        remoteVideo.srcObject = e.streams[0];
+      }
+    };
+
+    pc.onicecandidate = e => {
+      if (e.candidate) socket.emit('candidate', id, e.candidate);
+    };
   });
 
   socket.on('candidate', (id, candidate) => {
-    console.log(`📨 ICE candidate from ${socket.id} to ${id}`);
-    socket.to(id).emit('candidate', socket.id, candidate);
+    peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
   });
-
-  socket.on('disconnect', () => {
-    console.log(`❌ Disconnected: ${socket.id}`);
-
-    // Neu broadcaster roi di, reset bien
-    if (socket.id === broadcaster) {
-      broadcaster = null;
-      console.log('⚠ Broadcaster disconnected.');
-    }
-
-    // Thong bao cho cac client con lai rang mot peer da roi khoi
-    socket.broadcast.emit('disconnectPeer', socket.id);
-  });
-});
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`\n✅ Server is running! Access it at: https://webrtc-qlql.onrender.com//\n`);
-});
+}
