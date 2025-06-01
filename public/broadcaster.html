@@ -1,94 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Streaming Page</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
-  <style>
-    /* Video lật ngang */
-    video#localVideo {
-      transform: scaleX(-1);
-    }
-  </style>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body class="bg-gray-100 flex flex-col items-center p-6">
   <h1 class="text-3xl font-bold mb-6">Drone Cam Streaming</h1>
-  <video id="localVideo" autoplay muted playsinline class="w-full max-w-2xl bg-black rounded shadow"></video>
+  <video id="localVideo" autoplay muted class="w-full max-w-2xl bg-black rounded shadow"></video>
   <div class="mt-4 space-x-2">
     <button id="startBtn" class="px-4 py-2 bg-blue-600 text-white rounded">Start Stream</button>
     <button id="stopBtn" class="px-4 py-2 bg-red-600 text-white rounded disabled:opacity-50" disabled>Stop Stream</button>
   </div>
-
   <script src="/socket.io/socket.io.js"></script>
-  <script>
-    const socket = io();
-    const peerConnections = {};
-    const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-
-    const localVideo = document.getElementById('localVideo');
-    const startBtn = document.getElementById('startBtn');
-    const stopBtn = document.getElementById('stopBtn');
-
-    let localStream;
-
-    startBtn.onclick = async () => {
-      try {
-        localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-        
-        // Tạo video lật ngang (đã dùng CSS transform nên không cần canvas xử lý)
-        localVideo.srcObject = localStream;
-
-        socket.emit('broadcaster');
-        startBtn.disabled = true;
-        stopBtn.disabled = false;
-      } catch (err) {
-        alert('Không thể truy cập camera: ' + err.message);
-      }
-    };
-
-    stopBtn.onclick = () => location.reload();
-
-    socket.on('watcher', async id => {
-      const pc = new RTCPeerConnection(config);
-      peerConnections[id] = pc;
-
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-
-      pc.onicecandidate = e => {
-        if (e.candidate) {
-          socket.emit('candidate', id, e.candidate);
-        }
-      };
-
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit('offer', id, pc.localDescription);
-    });
-
-    socket.on('answer', (id, description) => {
-      peerConnections[id]?.setRemoteDescription(description);
-    });
-
-    socket.on('candidate', (id, candidate) => {
-      peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
-    });
-
-    socket.on('disconnectPeer', id => {
-      peerConnections[id]?.close();
-      delete peerConnections[id];
-    });
-    document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') {
-    console.log('Tab active, resume video');
-    if (localVideo && localStream) {
-      localVideo.play().catch(e => console.warn('Error playing video:', e));
-    }
-  } else {
-    console.log('Tab hidden, pause local video but keep stream');
-    if (localVideo) localVideo.pause();
-  }
-});
-  </script>
+  <script src="script.js"></script>
 </body>
 </html>

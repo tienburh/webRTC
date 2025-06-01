@@ -10,11 +10,6 @@
 <body class="bg-gray-100 flex flex-col items-center p-6">
   <h1 class="text-3xl font-bold mb-6">Drone Cam Viewing</h1>
   <video id="remoteVideo" autoplay playsinline controls class="w-full max-w-2xl bg-black rounded shadow"></video>
-  <script>
-  const remoteVideo = document.getElementById('remoteVideo');
-  remoteVideo.srcObject = e.streams[0];
-  remoteVideo.play().catch(error => console.error('Error playing video:', error));
-</script>
   <p id="status" class="mt-4 text-gray-700">Initializing...</p>
 
   <script src="/socket.io/socket.io.js"></script>
@@ -57,12 +52,7 @@
 
       pc.ontrack = event => {
         console.log('Received remote track, setting video source');
-        pc.ontrack = (event) => {
-  if (event.streams && event.streams[0]) {
-    remoteVideo.srcObject = event.streams[0];
-  }
-};
-
+        remoteVideo.srcObject = event.streams[0];
         status.textContent = 'Live';
       };
 
