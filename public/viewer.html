@@ -1,36 +1,50 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Viewing Page</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drone Cam Viewing</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
+  <style>
+    /* Giữ controls đúng chiều */
+    video#remoteVideo::-webkit-media-controls-panel {
+      transform: scaleX(1);
+    }
+
+    /* Lật ngang video */
+    video#remoteVideo {
+      transform: scaleX(-1);
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      background-color: black;
+      border-radius: 0.5rem;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      object-fit: contain;
+    }
+  </style>
 </head>
 <body class="bg-gray-100 flex flex-col items-center p-6">
   <h1 class="text-3xl font-bold mb-6">Drone Cam Viewing</h1>
-  <video id="remoteVideo" autoplay playsinline controls class="w-full max-w-2xl bg-black rounded shadow"></video>
+  
+  <video id="remoteVideo" autoplay playsinline controls muted></video>
+  
   <p id="status" class="mt-4 text-gray-700">Initializing...</p>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
     console.log('▶ viewer.html loaded');
     const socket = io();
-    socket.on('connect', () => console.log('Socket connected with id:', socket.id));
-    socket.on('connect_error', err => console.error('Connection error:', err));
     const peerConnections = {};
     const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
     const remoteVideo = document.getElementById('remoteVideo');
     const status = document.getElementById('status');
 
-    // Khi socket sẵn sàng, gửi watcher
     socket.on('connect', () => {
-      console.log('Emitting watcher');
+      console.log('Socket connected with id:', socket.id);
       status.textContent = 'Connecting to drone camera...';
       socket.emit('watcher');
     });
 
-    // Đón nhận broadcaster start sự kiện (nếu viewer trước broadcaster)
     socket.on('broadcaster', () => {
       console.log('Received broadcaster event, re-emitting watcher');
       status.textContent = 'Broadcast available, reconnecting...';
@@ -38,20 +52,20 @@
     });
 
     socket.on('offer', async (id, description) => {
-      console.log('Received offer from broadcaster:', id, description);
+      console.log('Received offer from broadcaster:', id);
       status.textContent = 'Establishing connection...';
+
       const pc = new RTCPeerConnection(config);
       peerConnections[id] = pc;
 
       pc.onicecandidate = e => {
         if (e.candidate) {
-          console.log('Sending candidate:', e.candidate);
           socket.emit('candidate', id, e.candidate);
         }
       };
 
       pc.ontrack = event => {
-        console.log('Received remote track, setting video source');
+        console.log('Received remote track');
         remoteVideo.srcObject = event.streams[0];
         status.textContent = 'Live';
       };
@@ -59,24 +73,20 @@
       await pc.setRemoteDescription(description);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      console.log('Sending answer');
       socket.emit('answer', id, pc.localDescription);
     });
 
     socket.on('candidate', (id, candidate) => {
-      console.log('Received candidate:', candidate);
       peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
     });
 
     socket.on('disconnectPeer', id => {
-      console.log('Peer disconnected:', id);
       peerConnections[id]?.close();
       delete peerConnections[id];
       status.textContent = 'Broadcast ended';
     });
 
     socket.on('disconnect', () => {
-      console.warn('Socket disconnected');
       status.textContent = 'Disconnected from server';
     });
   </script>
