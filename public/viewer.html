@@ -2,38 +2,36 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Drone Cam Viewing</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Viewing Page</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <style>
-    /* Giữ tỷ lệ 16:9 cho video */
-    .video-container {
+    /* Container để lật video */
+    .video-wrapper {
+      aspect-ratio: 16 / 9;
+      max-width: 100%;
       position: relative;
-      width: 100%;
-      max-width: 960px;
-      padding-top: 56.25%; /* 16:9 ratio (9 / 16 = 0.5625) */
-      background: black;
-      border-radius: 0.5rem;
-      box-shadow: 0 0 10px rgba(0, 0, 0, 0.3);
-      overflow: hidden;
     }
 
-    .video-container video {
-      position: absolute;
-      top: 0;
-      left: 0;
+    video {
       width: 100%;
       height: 100%;
       object-fit: cover;
-      transform: scaleX(-1); /* Lật ngang video */
+      transform: scaleX(-1); /* Lật hình ảnh */
+      transform-origin: center;
       background-color: black;
+    }
+
+    /* Lớp phủ để giữ controls không bị lật */
+    .video-wrapper video::-webkit-media-controls-panel {
+      transform: scaleX(-1); /* Revert controls */
     }
   </style>
 </head>
-<body class="bg-gray-100 flex flex-col items-center p-6 min-h-screen">
+<body class="bg-gray-100 flex flex-col items-center p-6">
   <h1 class="text-3xl font-bold mb-6">Drone Cam Viewing</h1>
 
-  <div class="video-container">
+  <div class="video-wrapper rounded shadow overflow-hidden bg-black">
     <video id="remoteVideo" autoplay playsinline controls></video>
   </div>
 
@@ -41,43 +39,35 @@
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    console.log('▶ viewer.html loaded');
     const socket = io();
-    const remoteVideo = document.getElementById('remoteVideo');
-    const status = document.getElementById('status');
     const peerConnections = {};
     const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+    const remoteVideo = document.getElementById('remoteVideo');
+    const status = document.getElementById('status');
 
-    // Gửi yêu cầu xem khi kết nối
     socket.on('connect', () => {
-      console.log('Socket connected:', socket.id);
+      console.log('Emitting watcher');
       status.textContent = 'Connecting to drone camera...';
       socket.emit('watcher');
     });
 
-    // Khi broadcaster sẵn sàng, gửi lại yêu cầu
     socket.on('broadcaster', () => {
-      console.log('Received broadcaster event');
+      console.log('Received broadcaster event, re-emitting watcher');
       status.textContent = 'Broadcast available, reconnecting...';
       socket.emit('watcher');
     });
 
-    // Nhận offer từ broadcaster
     socket.on('offer', async (id, description) => {
-      console.log('Received offer from:', id);
-      status.textContent = 'Establishing connection...';
-
       const pc = new RTCPeerConnection(config);
       peerConnections[id] = pc;
 
-      pc.onicecandidate = event => {
-        if (event.candidate) {
-          socket.emit('candidate', id, event.candidate);
+      pc.onicecandidate = e => {
+        if (e.candidate) {
+          socket.emit('candidate', id, e.candidate);
         }
       };
 
       pc.ontrack = event => {
-        console.log('Received remote track');
         remoteVideo.srcObject = event.streams[0];
         status.textContent = 'Live';
       };
@@ -89,26 +79,17 @@
     });
 
     socket.on('candidate', (id, candidate) => {
-      console.log('Received candidate');
       peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
     });
 
     socket.on('disconnectPeer', id => {
-      console.log('Peer disconnected:', id);
       peerConnections[id]?.close();
       delete peerConnections[id];
       status.textContent = 'Broadcast ended';
     });
 
     socket.on('disconnect', () => {
-      console.warn('Socket disconnected');
       status.textContent = 'Disconnected from server';
-    });
-
-    // Giữ transform: scaleX(-1) khi vào fullscreen
-    document.addEventListener('fullscreenchange', () => {
-      const isFullscreen = !!document.fullscreenElement;
-      remoteVideo.style.transform = 'scaleX(-1)';
     });
   </script>
 </body>
