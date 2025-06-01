@@ -1,181 +1,123 @@
-// Khoi tao socket.io client de ket noi voi signaling server
 const socket = io();
-
-// Luu cac peer connections voi cac viewer, key la socket ID
 const peerConnections = {};
+const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
-// Cau hinh ICE Server, o day su dung STUN server cua Google
-const config = { 
-  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
-};
+const localVideo = document.getElementById('localVideo');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
 
-// === Tham chieu den cac phan tu HTML ===
-const localVideo  = document.getElementById('localVideo');   // video hien thi camera local
-const remoteVideo = document.getElementById('remoteVideo');  // video hien thi luong nhan tu nguoi khac
-const startBtn    = document.getElementById('startBtn');     // nut bat dau truyen (broadcaster)
-const stopBtn     = document.getElementById('stopBtn');      // nut dung truyen
-const joinBtn     = document.getElementById('joinBtn');      // nut tham gia xem (viewer)
+let localStream = null;
+let isStreaming = false;
 
-// --- Broadcaster ---
-if (startBtn) {
-  console.log('▶ Found startBtn, attaching handler');
+async function startStreaming() {
+  if (isStreaming) return;
+  try {
+    localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    localVideo.srcObject = localStream;
 
-  startBtn.addEventListener('click', async () => {
-    console.log('>> Start clicked');
-    try {
-      // Yêu cầu quyền truy cập camera và micro
-      console.log('>> Requesting camera...');
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
-      console.log('<< Camera OK:', stream);
+    // Gửi broadcaster signal lên server
+    socket.emit('broadcaster');
 
-      // Lấy track video gốc
-      const videoTrack = stream.getVideoTracks()[0];
+    // Cập nhật các peer connections (nếu có)
+    Object.values(peerConnections).forEach(pc => {
+      // Xóa các track cũ nếu có
+      pc.getSenders().forEach(sender => pc.removeTrack(sender));
 
-      // Tạo video ẩn để phát video gốc (không thêm vào DOM)
-      const hiddenVideo = document.createElement('video');
-      hiddenVideo.srcObject = new MediaStream([videoTrack]);
-      hiddenVideo.muted = true;
-      hiddenVideo.play();
+      // Thêm các track mới
+      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+    });
 
-      // Tạo canvas để vẽ video đã lật ngang
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
+    isStreaming = true;
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
 
-      // Khi video đã có kích thước, thiết lập canvas size
-      hiddenVideo.addEventListener('loadedmetadata', () => {
-        canvas.width = hiddenVideo.videoWidth;
-        canvas.height = hiddenVideo.videoHeight;
-
-        // Hàm vẽ liên tục video đã lật ngang lên canvas
-        function draw() {
-          ctx.save();
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          // Lật ngang (mirror)
-          ctx.translate(canvas.width, 0);
-          ctx.scale(-1, 1);
-
-          ctx.drawImage(hiddenVideo, 0, 0, canvas.width, canvas.height);
-          ctx.restore();
-
-          requestAnimationFrame(draw);
-        }
-        draw();
-      });
-
-      // Tạo stream từ canvas
-      const canvasStream = canvas.captureStream(30); // fps 30
-
-      // Thêm track audio từ stream gốc vào canvasStream (nếu có)
-      const audioTracks = stream.getAudioTracks();
-      if (audioTracks.length > 0) {
-        canvasStream.addTrack(audioTracks[0]);
-      }
-
-      // Hiển thị stream canvas (đã lật) lên video local
-      localVideo.srcObject = canvasStream;
-
-      // Gửi thông báo lên server là broadcaster
-      socket.emit('broadcaster');
-
-      // Lưu stream đã lật để dùng cho peer connection
-      window._broadcastStream = canvasStream;
-
-      // Vô hiệu hóa nút Start, bật nút Stop
-      startBtn.disabled = true;
-      stopBtn.disabled = false;
-
-    } catch (err) {
-      console.error('❌ getUserMedia error:', err);
-      alert('Lỗi khi truy cập camera: ' + err.name + ' – ' + err.message);
-    }
-  });
-
-  // Khi nhấn Stop thì reload lại trang
-  stopBtn?.addEventListener('click', () => window.location.reload());
-
-  // Khi có viewer kết nối (server gửi socket ID của viewer)
-  socket.on('watcher', async id => {
-    console.log('📡 Watcher connected:', id);
-
-    // Tạo peer connection mới cho viewer
-    const pc = new RTCPeerConnection(config);
-    peerConnections[id] = pc;
-
-    // Lấy stream đã lật ngang
-    const stream = window._broadcastStream;
-    if (!stream) {
-      console.warn('⚠️ No broadcast stream found!');
-      return;
-    }
-
-    // Thêm các track của stream vào peer connection
-    stream.getTracks().forEach(track => pc.addTrack(track, stream));
-
-    // Gửi ICE candidate cho viewer
-    pc.onicecandidate = event => {
-      if (event.candidate) {
-        socket.emit('candidate', id, event.candidate);
-      }
-    };
-
-    // Tạo offer và gửi cho viewer
-    const offer = await pc.createOffer();
-    await pc.setLocalDescription(offer);
-    socket.emit('offer', id, pc.localDescription);
-  });
-
-  // Khi nhận answer từ viewer
-  socket.on('answer', (id, description) => {
-    console.log('📨 Received answer from', id);
-    peerConnections[id]?.setRemoteDescription(description);
-  });
-
-  // Khi nhận ICE candidate từ viewer
-  socket.on('candidate', (id, candidate) => {
-    console.log('📨 Received ICE candidate from', id);
-    peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
-  });
-
-  // Khi viewer ngắt kết nối
-  socket.on('disconnectPeer', id => {
-    console.log('❌ Viewer disconnected:', id);
-    peerConnections[id]?.close();
-    delete peerConnections[id];
-  });
+    console.log('Streaming started');
+  } catch (err) {
+    console.error('Error accessing camera/microphone:', err);
+    alert('Lỗi khi truy cập camera/microphone: ' + err.message);
+  }
 }
 
-// --- Viewer ---
-if (joinBtn) {
-  joinBtn.addEventListener('click', () => {
-    socket.emit('watcher');
-  });
+function stopStreaming() {
+  if (!isStreaming) return;
+  if (localStream) {
+    localStream.getTracks().forEach(track => track.stop());
+    localStream = null;
+  }
+  localVideo.srcObject = null;
+  isStreaming = false;
+  startBtn.disabled = false;
+  stopBtn.disabled = true;
 
-  // Khi nhận offer từ broadcaster
-  socket.on('offer', async (id, desc) => {
-    const pc = new RTCPeerConnection(config);
-    peerConnections[id] = pc;
-
-    await pc.setRemoteDescription(desc);
-
-    const answer = await pc.createAnswer();
-    await pc.setLocalDescription(answer);
-    socket.emit('answer', id, answer);
-
-    // Nhận stream từ broadcaster
-    pc.ontrack = e => {
-      if (remoteVideo) {
-        remoteVideo.srcObject = e.streams[0];
-      }
-    };
-
-    pc.onicecandidate = e => {
-      if (e.candidate) socket.emit('candidate', id, e.candidate);
-    };
-  });
-
-  // Khi nhận ICE candidate từ broadcaster
-  socket.on('candidate', (id, candidate) => {
-    peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
-  });
+  console.log('Streaming stopped');
 }
+
+// Xử lý Start button
+startBtn.addEventListener('click', startStreaming);
+
+// Xử lý Stop button
+stopBtn.addEventListener('click', () => {
+  stopStreaming();
+  // Đóng các peer connection
+  Object.values(peerConnections).forEach(pc => pc.close());
+  for (const id in peerConnections) delete peerConnections[id];
+  // Reload trang để reset toàn bộ trạng thái
+  window.location.reload();
+});
+
+// Khi có viewer kết nối
+socket.on('watcher', async id => {
+  console.log('Watcher connected:', id);
+  const pc = new RTCPeerConnection(config);
+  peerConnections[id] = pc;
+
+  if (!localStream) {
+    console.warn('No local stream, cannot add tracks');
+    return;
+  }
+
+  // Thêm track từ local stream vào peer connection
+  localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
+
+  pc.onicecandidate = event => {
+    if (event.candidate) {
+      socket.emit('candidate', id, event.candidate);
+    }
+  };
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  socket.emit('offer', id, pc.localDescription);
+});
+
+// Nhận answer từ viewer
+socket.on('answer', (id, description) => {
+  console.log('Received answer from', id);
+  peerConnections[id]?.setRemoteDescription(description);
+});
+
+// Nhận candidate từ viewer
+socket.on('candidate', (id, candidate) => {
+  peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
+});
+
+// Viewer ngắt kết nối
+socket.on('disconnectPeer', id => {
+  console.log('Viewer disconnected:', id);
+  peerConnections[id]?.close();
+  delete peerConnections[id];
+});
+
+// --- XỬ LÝ TAB VISIBILITY ---
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    console.log('Tab active again');
+    if (!isStreaming) {
+      startStreaming();
+    }
+  } else {
+    console.log('Tab hidden, stop streaming');
+    stopStreaming();
+  }
+});
