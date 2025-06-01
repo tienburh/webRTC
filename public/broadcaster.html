@@ -78,6 +78,17 @@
       peerConnections[id]?.close();
       delete peerConnections[id];
     });
+    document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') {
+    console.log('Tab active, resume video');
+    if (localVideo && localStream) {
+      localVideo.play().catch(e => console.warn('Error playing video:', e));
+    }
+  } else {
+    console.log('Tab hidden, pause local video but keep stream');
+    if (localVideo) localVideo.pause();
+  }
+});
   </script>
 </body>
 </html>
