@@ -6,10 +6,16 @@
   <title>Viewing Page</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
   <link rel="stylesheet" href="style.css">
+  
+  <style>
+  #remoteVideo {
+    transform: scaleX(-1);
+  }
+</style>
 </head>
 <body class="bg-gray-100 flex flex-col items-center p-6">
   <h1 class="text-3xl font-bold mb-6">Drone Cam Viewing</h1>
-  <video id="localVideo" autoplay playsinline controls class="w-full max-w-2xl bg-black rounded shadow"></video>
+<video id="remoteVideo" autoplay playsinline controls class="w-full max-w-2xl bg-black rounded shadow transform scale-x-[-1]"></video>
   <p id="status" class="mt-4 text-gray-700">Initializing...</p>
 
   <script src="/socket.io/socket.io.js"></script>
