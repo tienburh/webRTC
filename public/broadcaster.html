@@ -1,21 +1,30 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Streaming Page</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drone Broadcaster</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
-
 </head>
+<body class="min-h-screen bg-gradient-to-b from-gray-100 to-gray-300 flex flex-col items-center justify-center p-6">
 
-<body class="bg-gray-100 flex flex-col items-center p-6">
-  <h1 class="text-3xl font-bold mb-6">Drone Cam Streaming</h1>
-<video id="localVideo" autoplay muted class="w-full max-w-2xl bg-black rounded shadow"></video>
-  <div class="mt-4 space-x-2">
-    <button id="startBtn" class="px-4 py-2 bg-blue-600 text-white rounded">Start Stream</button>
-    <button id="stopBtn" class="px-4 py-2 bg-red-600 text-white rounded disabled:opacity-50" disabled>Stop Stream</button>
+  <div class="w-full max-w-4xl bg-white rounded-2xl shadow-xl p-6">
+    <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">🚁 Drone Camera - Broadcaster</h1>
+
+    <div class="relative w-full bg-black rounded-lg overflow-hidden aspect-video shadow-md mb-4">
+      <video id="localVideo" autoplay muted playsinline class="w-full h-full object-cover"></video>
+    </div>
+
+    <div class="flex justify-center space-x-4 mt-4">
+      <button id="startBtn" class="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-lg font-semibold transition">
+        Start Stream
+      </button>
+      <button id="stopBtn" disabled class="px-6 py-2 bg-red-500 hover:bg-red-600 text-white rounded-lg text-lg font-semibold transition disabled:opacity-50">
+        Stop Stream
+      </button>
+    </div>
   </div>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="script.js"></script>
 </body>
