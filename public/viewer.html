@@ -1,51 +1,45 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Viewing Page</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
   <style>
+    /* Container để lật video */
     .video-wrapper {
-      position: relative;
-      width: 100%;
-      max-width: 960px;
       aspect-ratio: 16 / 9;
-      background-color: black;
-      border-radius: 0.5rem;
-      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-      overflow: hidden;
+      max-width: 100%;
+      position: relative;
     }
 
-    video#remoteVideo::cue {
-      transform: none !important;
-    }
-
-    video#remoteVideo {
-      position: absolute;
-      top: 0;
-      left: 0;
+    video {
       width: 100%;
       height: 100%;
-      object-fit: contain;
-      transform: scaleX(-1);
+      object-fit: cover;
+      transform: scaleX(-1); /* Lật hình ảnh */
+      transform-origin: center;
+      background-color: black;
+    }
+
+    /* Lớp phủ để giữ controls không bị lật */
+    .video-wrapper video::-webkit-media-controls-panel {
+      transform: scaleX(-1); /* Revert controls */
     }
   </style>
 </head>
 <body class="bg-gray-100 flex flex-col items-center p-6">
   <h1 class="text-3xl font-bold mb-6">Drone Cam Viewing</h1>
-  <div class="video-wrapper">
-    <video id="remoteVideo" autoplay playsinline controls muted></video>
+
+  <div class="video-wrapper rounded shadow overflow-hidden bg-black">
+    <video id="remoteVideo" autoplay playsinline controls></video>
   </div>
+
   <p id="status" class="mt-4 text-gray-700">Initializing...</p>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
-    console.log('▶ viewer.html loaded');
     const socket = io();
-    socket.on('connect', () => console.log('Socket connected with id:', socket.id));
-    socket.on('connect_error', err => console.error('Connection error:', err));
     const peerConnections = {};
     const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
     const remoteVideo = document.getElementById('remoteVideo');
@@ -64,20 +58,16 @@
     });
 
     socket.on('offer', async (id, description) => {
-      console.log('Received offer from broadcaster:', id, description);
-      status.textContent = 'Establishing connection...';
       const pc = new RTCPeerConnection(config);
       peerConnections[id] = pc;
 
       pc.onicecandidate = e => {
         if (e.candidate) {
-          console.log('Sending candidate:', e.candidate);
           socket.emit('candidate', id, e.candidate);
         }
       };
 
       pc.ontrack = event => {
-        console.log('Received remote track, setting video source');
         remoteVideo.srcObject = event.streams[0];
         status.textContent = 'Live';
       };
@@ -85,24 +75,20 @@
       await pc.setRemoteDescription(description);
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      console.log('Sending answer');
       socket.emit('answer', id, pc.localDescription);
     });
 
     socket.on('candidate', (id, candidate) => {
-      console.log('Received candidate:', candidate);
       peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
     });
 
     socket.on('disconnectPeer', id => {
-      console.log('Peer disconnected:', id);
       peerConnections[id]?.close();
       delete peerConnections[id];
       status.textContent = 'Broadcast ended';
     });
 
     socket.on('disconnect', () => {
-      console.warn('Socket disconnected');
       status.textContent = 'Disconnected from server';
     });
   </script>
