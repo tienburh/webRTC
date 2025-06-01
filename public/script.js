@@ -14,18 +14,9 @@ async function startStreaming() {
   try {
     localStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     localVideo.srcObject = localStream;
+    localVideo.play();
 
-    // Gửi broadcaster signal lên server
     socket.emit('broadcaster');
-
-    // Cập nhật các peer connections (nếu có)
-    Object.values(peerConnections).forEach(pc => {
-      // Xóa các track cũ nếu có
-      pc.getSenders().forEach(sender => pc.removeTrack(sender));
-
-      // Thêm các track mới
-      localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
-    });
 
     isStreaming = true;
     startBtn.disabled = true;
@@ -41,10 +32,14 @@ async function startStreaming() {
 function stopStreaming() {
   if (!isStreaming) return;
   if (localStream) {
-    localStream.getTracks().forEach(track => track.stop());
-    localStream = null;
+    // Không tắt track khi dừng stream nữa để tránh mất stream khi chuyển tab
+    // localStream.getTracks().forEach(track => track.stop());
+    // Thay vào đó chỉ tắt video local, các peer connection vẫn giữ
+    localVideo.pause();
+    localVideo.srcObject = null;
+    // Nhưng bạn có thể tắt track khi stop thực sự (ví dụ reload trang)
   }
-  localVideo.srcObject = null;
+  localStream = null;
   isStreaming = false;
   startBtn.disabled = false;
   stopBtn.disabled = true;
@@ -52,20 +47,15 @@ function stopStreaming() {
   console.log('Streaming stopped');
 }
 
-// Xử lý Start button
 startBtn.addEventListener('click', startStreaming);
 
-// Xử lý Stop button
 stopBtn.addEventListener('click', () => {
   stopStreaming();
-  // Đóng các peer connection
   Object.values(peerConnections).forEach(pc => pc.close());
   for (const id in peerConnections) delete peerConnections[id];
-  // Reload trang để reset toàn bộ trạng thái
   window.location.reload();
 });
 
-// Khi có viewer kết nối
 socket.on('watcher', async id => {
   console.log('Watcher connected:', id);
   const pc = new RTCPeerConnection(config);
@@ -76,7 +66,6 @@ socket.on('watcher', async id => {
     return;
   }
 
-  // Thêm track từ local stream vào peer connection
   localStream.getTracks().forEach(track => pc.addTrack(track, localStream));
 
   pc.onicecandidate = event => {
@@ -90,34 +79,35 @@ socket.on('watcher', async id => {
   socket.emit('offer', id, pc.localDescription);
 });
 
-// Nhận answer từ viewer
 socket.on('answer', (id, description) => {
   console.log('Received answer from', id);
   peerConnections[id]?.setRemoteDescription(description);
 });
 
-// Nhận candidate từ viewer
 socket.on('candidate', (id, candidate) => {
   peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
 });
 
-// Viewer ngắt kết nối
 socket.on('disconnectPeer', id => {
   console.log('Viewer disconnected:', id);
   peerConnections[id]?.close();
   delete peerConnections[id];
 });
 
-// --- XỬ LÝ TAB VISIBILITY ---
-
+// XỬ LÝ TAB VISIBILITY
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'visible') {
-    console.log('Tab active again');
-    if (!isStreaming) {
-      startStreaming();
+    console.log('Tab active');
+    // Resume video nếu có stream
+    if (localVideo && isStreaming) {
+      localVideo.play().catch(e => console.warn('Error resume video:', e));
     }
   } else {
-    console.log('Tab hidden, stop streaming');
-    stopStreaming();
+    console.log('Tab hidden');
+    // Pause video local, giữ stream và peer connections
+    if (localVideo && isStreaming) {
+      localVideo.pause();
+      console.log('Video paused due to tab hidden');
+    }
   }
 });
