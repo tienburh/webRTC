@@ -2,21 +2,34 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Redirecting...</title>
-  <script>
-    const ua = navigator.userAgent.toLowerCase();
-
-    // Kiểm tra nếu là Raspberry Pi (Linux ARM)
-    const isPi = ua.includes("linux") && (ua.includes("armv") || ua.includes("raspbian"));
-
-    if (isPi) {
-      window.location.href = "broadcaster.html";
-    } else {
-      window.location.href = "broadcaster.html";
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    body {
+      @apply flex items-center justify-center h-screen bg-gray-100;
     }
-  </script>
+    .msg {
+      @apply text-center text-lg font-medium text-gray-700;
+    }
+  </style>
 </head>
 <body>
-  <p>Đang chuyển hướng...</p>
+  <div class="msg">
+    <p>Đang xác định thiết bị và chuyển hướng...</p>
+  </div>
+
+  <script>
+    (function () {
+      const ua = navigator.userAgent.toLowerCase();
+      const isPi = ua.includes("linux") && (ua.includes("armv") || ua.includes("raspbian"));
+
+      if (isPi) {
+        window.location.href = "broadcaster.html";
+      } else {
+        window.location.href = "broadcaster.html";
+      }
+    })();
+  </script>
 </body>
 </html>
