@@ -2,21 +2,14 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Drone Cam Streaming</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-  <link rel="stylesheet" href="style.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Drone Cam - Broadcaster</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
 </head>
 <body class="bg-gray-100 flex flex-col items-center p-6">
-  <h1 class="text-3xl font-bold mb-6">Drone Camera Live Stream</h1>
-
-  <!-- Video hiển thị từ camera Pi -->
+  <h1 class="text-3xl font-bold mb-6">Drone Camera - Streaming</h1>
   <video id="localVideo" autoplay muted playsinline class="w-full max-w-2xl bg-black rounded shadow"></video>
-
-  <!-- Không cần nút Start/Stop nữa -->
-  
-  <!-- Socket.IO và mã WebRTC -->
   <script src="/socket.io/socket.io.js"></script>
-  <script src="script.js"></script>
+  <script src="script-broadcaster.js"></script>
 </body>
 </html>
