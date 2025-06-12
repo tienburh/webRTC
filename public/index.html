@@ -10,9 +10,9 @@
     const isPi = ua.includes("linux") && (ua.includes("armv") || ua.includes("raspbian"));
 
     if (isPi) {
-      window.location.href = "broadcaster.html";
-    } else {
       window.location.href = "viewer.html";
+    } else {
+      window.location.href = "broadcaster.html";
     }
   </script>
 </head>
