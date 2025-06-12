@@ -22,12 +22,12 @@
   <script>
     (function () {
       const ua = navigator.userAgent.toLowerCase();
-      const isPi = ua.includes("linux") && (ua.includes("armv") || ua.includes("raspbian"));
+const isPi = true; // ép luôn chuyển qua broadcaster.html
 
       if (isPi) {
         window.location.href = "broadcaster.html";
       } else {
-        window.location.href = "broadcaster.html";
+        window.location.href = "viewer.html";
       }
     })();
   </script>
