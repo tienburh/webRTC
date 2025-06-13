@@ -15,7 +15,9 @@ socket.on('offer', async (id, description) => {
   pc.ontrack = event => {
     console.log('📺 Received remote track:', event.streams[0]);
     remoteVideo.srcObject = event.streams[0];
-
+    remoteVideo.play().catch(err => {
+    console.warn('⚠️ Không thể tự động phát video:', err);
+    });
     // Kiểm tra lại sau 3 giây xem video đã được gán chưa
     setTimeout(() => {
       if (!remoteVideo.srcObject) {
