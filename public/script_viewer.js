@@ -25,13 +25,24 @@ socket.on('offer', async (id, description) => {
   socket.emit('answer', id, pc.localDescription);
 
   pc.ontrack = event => {
-    console.log('📺 Received remote track:', event.streams[0]);
-    receivedStream = event.streams[0];
-    remoteVideo.srcObject = receivedStream;
+    console.log('📺 Received remote track event.');
+    const stream = event.streams[0];
+    if (stream) {
+      console.log('✅ Remote stream received:', stream);
+      console.log('🎥 Remote stream tracks:', stream.getTracks());
+      console.log('🎥 Remote video tracks:', stream.getVideoTracks());
 
-    remoteVideo.play().catch(err => {
-      console.warn('⚠️ Không thể tự động phát video:', err);
-    });
+      receivedStream = stream;
+      remoteVideo.srcObject = receivedStream;
+
+      remoteVideo.play().then(() => {
+        console.log('▶️ Video is playing automatically.');
+      }).catch(err => {
+        console.warn('⚠️ Không thể tự động phát video:', err);
+      });
+    } else {
+      console.warn('⚠️ Không nhận được stream từ broadcaster!');
+    }
   };
 
   pc.onicecandidate = event => {
@@ -51,7 +62,9 @@ window.addEventListener('DOMContentLoaded', () => {
   if (playButton) {
     playButton.addEventListener('click', () => {
       if (receivedStream) {
-        remoteVideo.play().catch(err => {
+        remoteVideo.play().then(() => {
+          console.log('▶️ Video started manually.');
+        }).catch(err => {
           console.error('🎬 Error playing video:', err);
         });
       } else {
