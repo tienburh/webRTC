@@ -5,6 +5,8 @@ const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 const remoteVideo = document.getElementById('remoteVideo');
 const playButton = document.getElementById('playButton');
 
+let receivedStream = null;
+
 console.log('📡 Connecting as viewer...');
 socket.emit('watcher');
 
@@ -24,9 +26,9 @@ socket.on('offer', async (id, description) => {
 
   pc.ontrack = event => {
     console.log('📺 Received remote track:', event.streams[0]);
-    remoteVideo.srcObject = event.streams[0];
+    receivedStream = event.streams[0];
+    remoteVideo.srcObject = receivedStream;
 
-    // Nếu đã tương tác trước đó thì tự phát
     remoteVideo.play().catch(err => {
       console.warn('⚠️ Không thể tự động phát video:', err);
     });
@@ -45,11 +47,10 @@ socket.on('candidate', (id, candidate) => {
   peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
 });
 
-// ✅ Đảm bảo DOM đã sẵn sàng để gán sự kiện
 window.addEventListener('DOMContentLoaded', () => {
   if (playButton) {
     playButton.addEventListener('click', () => {
-      if (remoteVideo.srcObject) {
+      if (receivedStream) {
         remoteVideo.play().catch(err => {
           console.error('🎬 Error playing video:', err);
         });
