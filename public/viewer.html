@@ -8,11 +8,14 @@
 </head>
 <body class="bg-gray-100 flex flex-col items-center p-6">
   <h1 class="text-3xl font-bold mb-6">Drone Camera - Viewer</h1>
+
   <video id="remoteVideo" autoplay playsinline class="w-full max-w-2xl bg-black rounded shadow"></video>
+
+  <button id="startBtn" class="mt-4 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded">
+    ▶️ Start Viewing
+  </button>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="script_viewer.js"></script>
-  <button id="startBtn" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded">
-  ▶️ Start Viewing
-</button>
 </body>
 </html>
