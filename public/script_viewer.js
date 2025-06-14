@@ -4,13 +4,23 @@ const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
 const remoteVideo = document.getElementById('remoteVideo');
 const playButton = document.getElementById('playButton');
-const statusText = document.getElementById('statusText');
 
 let receivedStream = null;
+let streamReady = false;
 
-console.log('📡 Connecting as viewer...');
-socket.emit('watcher');
+// ✅ Chờ khi broadcaster sẵn sàng thì mới gửi 'watcher'
+socket.on('broadcaster', () => {
+  console.log('📡 Broadcaster is available. Registering as watcher...');
+  socket.emit('watcher');
+});
 
+// 🔄 Fallback: nếu viewer vào trước broadcaster, tự động thử gửi watcher sau 3 giây
+setTimeout(() => {
+  socket.emit('watcher');
+  console.log('⏳ Retry sending watcher after timeout.');
+}, 3000);
+
+// 📨 Khi nhận được offer từ broadcaster
 socket.on('offer', async (id, description) => {
   console.log('📨 Received offer from broadcaster:', id);
 
@@ -18,56 +28,72 @@ socket.on('offer', async (id, description) => {
   peerConnections[id] = pc;
 
   await pc.setRemoteDescription(description);
-  console.log('🧾 Remote description set');
+  console.log('🧾 Remote description set.');
 
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  console.log('📤 Sending answer');
+  console.log('📤 Sending answer to broadcaster');
   socket.emit('answer', id, pc.localDescription);
 
   pc.ontrack = event => {
+    console.log('📺 Received remote track event.');
     const stream = event.streams[0];
     if (stream) {
-      console.log('✅ Stream received:', stream);
       receivedStream = stream;
-      remoteVideo.srcObject = stream;
+      remoteVideo.srcObject = receivedStream;
+      streamReady = true;
 
       remoteVideo.play().then(() => {
         console.log('▶️ Video is playing automatically.');
-        statusText.textContent = "✅ Video đang phát!";
       }).catch(err => {
-        console.warn('⚠️ Không thể tự động phát:', err);
-        playButton.classList.remove('hidden');
-        statusText.textContent = "🔈 Bấm Start để phát video";
+        console.warn('⚠️ Autoplay failed. User interaction may be required.', err);
       });
     } else {
-      console.warn('⚠️ Không có stream từ broadcaster');
-      statusText.textContent = "❌ Không có tín hiệu video!";
+      console.warn('⚠️ No stream received!');
     }
   };
 
   pc.onicecandidate = event => {
     if (event.candidate) {
+      console.log('📤 Sending ICE candidate to broadcaster');
       socket.emit('candidate', id, event.candidate);
     }
   };
 });
 
+// 📨 Nhận ICE candidate
 socket.on('candidate', (id, candidate) => {
-  peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
+  console.log('📥 Received ICE candidate from broadcaster');
+  const pc = peerConnections[id];
+  if (pc) {
+    pc.addIceCandidate(new RTCIceCandidate(candidate));
+  }
 });
 
-playButton.addEventListener('click', () => {
-  if (receivedStream) {
-    remoteVideo.play().then(() => {
-      console.log('▶️ Video started manually');
-      playButton.classList.add('hidden');
-      statusText.textContent = "✅ Video đang phát!";
-    }).catch(err => {
-      console.error('🎬 Error playing video:', err);
-      statusText.textContent = "❌ Không thể phát video!";
+// 🧹 Khi peer rớt
+socket.on('disconnectPeer', id => {
+  console.log(`❌ Peer disconnected: ${id}`);
+  const pc = peerConnections[id];
+  if (pc) {
+    pc.close();
+    delete peerConnections[id];
+  }
+});
+
+// ▶️ Nút start video
+window.addEventListener('DOMContentLoaded', () => {
+  if (playButton) {
+    playButton.addEventListener('click', () => {
+      if (streamReady && receivedStream) {
+        remoteVideo.play().then(() => {
+          console.log('▶️ Video manually started by user.');
+        }).catch(err => {
+          console.error('❌ Error playing video:', err);
+          alert('Không thể phát video: ' + err.message);
+        });
+      } else {
+        alert('⚠️ Video chưa sẵn sàng! Vui lòng chờ kết nối với Drone.');
+      }
     });
-  } else {
-    alert('⚠️ Video stream chưa sẵn sàng!');
   }
 });
