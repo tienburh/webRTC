@@ -1,49 +1,74 @@
+// Kết nối socket.io client với signaling server
 const socket = io();
+
+// Lưu peer connections với từng viewer
 const peerConnections = {};
-const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
-const remoteVideo = document.getElementById('remoteVideo');
-const startBtn = document.getElementById('startBtn');
 
-startBtn.addEventListener('click', () => {
-  console.log('📡 Connecting as viewer...');
-  socket.emit('watcher');
-});
+// Cấu hình STUN server
+const config = {
+  iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
+};
 
-// Nhận offer từ broadcaster
-socket.on('offer', async (id, description) => {
-  console.log('📨 Received offer from broadcaster:', id);
+// Tham chiếu phần tử video hiển thị camera local
+const localVideo = document.getElementById('localVideo');
 
-  const pc = new RTCPeerConnection(config);
-  peerConnections[id] = pc;
+// Khi trang được tải xong, tự động bắt đầu stream
+window.onload = async () => {
+  console.log('📷 Auto-start streaming on page load');
 
-  pc.ontrack = event => {
-    console.log('📺 Received remote track:', event.streams[0]);
-    remoteVideo.srcObject = event.streams[0];
-    remoteVideo.play().then(() => {
-      console.log('▶️ Video started successfully');
-    }).catch(err => {
-      console.warn('⚠️ play() failed again:', err);
+  try {
+    // Yêu cầu quyền truy cập camera + micro
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    console.log('✅ Camera stream acquired');
+    localVideo.srcObject = stream;
+
+    // Đăng ký là broadcaster với signaling server
+    socket.emit('broadcaster');
+
+    // Khi có viewer mới kết nối
+    socket.on('watcher', async id => {
+      console.log('📡 Watcher connected:', id);
+
+      const pc = new RTCPeerConnection(config);
+      peerConnections[id] = pc;
+
+      // Thêm track từ stream local vào peer connection
+      stream.getTracks().forEach(track => pc.addTrack(track, stream));
+
+      // Gửi ICE candidate đến viewer
+      pc.onicecandidate = event => {
+        if (event.candidate) {
+          socket.emit('candidate', id, event.candidate);
+        }
+      };
+
+      // Tạo offer và gửi cho viewer
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      socket.emit('offer', id, pc.localDescription);
     });
-  };
 
-  pc.onicecandidate = event => {
-    if (event.candidate) {
-      console.log('📤 Sending ICE candidate to broadcaster');
-      socket.emit('candidate', id, event.candidate);
-    }
-  };
+    // Nhận answer từ viewer
+    socket.on('answer', (id, description) => {
+      console.log('📨 Received answer from', id);
+      peerConnections[id]?.setRemoteDescription(description);
+    });
 
-  console.log('🧾 Setting remote description...');
-  await pc.setRemoteDescription(description);
+    // Nhận ICE candidate từ viewer
+    socket.on('candidate', (id, candidate) => {
+      console.log('📨 Received ICE candidate from', id);
+      peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
+    });
 
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  console.log('📤 Sending answer to broadcaster');
-  socket.emit('answer', id, pc.localDescription);
-});
+    // Khi viewer ngắt kết nối
+    socket.on('disconnectPeer', id => {
+      console.log('❌ Viewer disconnected:', id);
+      peerConnections[id]?.close();
+      delete peerConnections[id];
+    });
 
-// Nhận ICE candidate từ broadcaster
-socket.on('candidate', (id, candidate) => {
-  console.log('📥 Received ICE candidate from broadcaster');
-  peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
-});
+  } catch (err) {
+    console.error('❌ getUserMedia error:', err);
+    alert('Lỗi khi truy cập camera: ' + err.name + ' – ' + err.message);
+  }
+};

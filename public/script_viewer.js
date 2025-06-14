@@ -2,10 +2,14 @@ const socket = io();
 const peerConnections = {};
 const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 const remoteVideo = document.getElementById('remoteVideo');
+const startBtn = document.getElementById('startBtn');
 
-console.log('📡 Connecting as viewer...');
-socket.emit('watcher');
+startBtn.addEventListener('click', () => {
+  console.log('📡 Connecting as viewer...');
+  socket.emit('watcher');
+});
 
+// Nhận offer từ broadcaster
 socket.on('offer', async (id, description) => {
   console.log('📨 Received offer from broadcaster:', id);
 
@@ -15,16 +19,11 @@ socket.on('offer', async (id, description) => {
   pc.ontrack = event => {
     console.log('📺 Received remote track:', event.streams[0]);
     remoteVideo.srcObject = event.streams[0];
-    remoteVideo.play().catch(err => {
-    console.warn('⚠️ Không thể tự động phát video:', err);
+    remoteVideo.play().then(() => {
+      console.log('▶️ Video started successfully');
+    }).catch(err => {
+      console.warn('⚠️ play() failed again:', err);
     });
-    // Kiểm tra lại sau 3 giây xem video đã được gán chưa
-    setTimeout(() => {
-      if (!remoteVideo.srcObject) {
-        console.warn('⚠️ Chưa có video stream sau 3s!');
-        alert('Không nhận được video từ broadcaster. Kiểm tra lại kế  t nối hoặc thử reload!');
-      }
-    }, 3000);
   };
 
   pc.onicecandidate = event => {
@@ -39,11 +38,11 @@ socket.on('offer', async (id, description) => {
 
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-
   console.log('📤 Sending answer to broadcaster');
   socket.emit('answer', id, pc.localDescription);
 });
 
+// Nhận ICE candidate từ broadcaster
 socket.on('candidate', (id, candidate) => {
   console.log('📥 Received ICE candidate from broadcaster');
   peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
