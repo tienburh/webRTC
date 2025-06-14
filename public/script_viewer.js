@@ -1,28 +1,34 @@
 const socket = io();
 const peerConnections = {};
 const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
+
 const remoteVideo = document.getElementById('remoteVideo');
-const startBtn = document.getElementById('startBtn');
+const playButton = document.getElementById('playButton');
 
-startBtn.addEventListener('click', () => {
-  console.log('📡 Connecting as viewer...');
-  socket.emit('watcher');
-});
+console.log('📡 Connecting as viewer...');
+socket.emit('watcher');
 
-// Nhận offer từ broadcaster
 socket.on('offer', async (id, description) => {
   console.log('📨 Received offer from broadcaster:', id);
 
   const pc = new RTCPeerConnection(config);
   peerConnections[id] = pc;
 
+  await pc.setRemoteDescription(description);
+  console.log('🧾 Setting remote description...');
+
+  const answer = await pc.createAnswer();
+  await pc.setLocalDescription(answer);
+  console.log('📤 Sending answer to broadcaster');
+  socket.emit('answer', id, pc.localDescription);
+
   pc.ontrack = event => {
     console.log('📺 Received remote track:', event.streams[0]);
     remoteVideo.srcObject = event.streams[0];
-    remoteVideo.play().then(() => {
-      console.log('▶️ Video started successfully');
-    }).catch(err => {
-      console.warn('⚠️ play() failed again:', err);
+
+    // Nếu đã tương tác trước đó thì tự phát
+    remoteVideo.play().catch(err => {
+      console.warn('⚠️ Không thể tự động phát video:', err);
     });
   };
 
@@ -32,18 +38,24 @@ socket.on('offer', async (id, description) => {
       socket.emit('candidate', id, event.candidate);
     }
   };
-
-  console.log('🧾 Setting remote description...');
-  await pc.setRemoteDescription(description);
-
-  const answer = await pc.createAnswer();
-  await pc.setLocalDescription(answer);
-  console.log('📤 Sending answer to broadcaster');
-  socket.emit('answer', id, pc.localDescription);
 });
 
-// Nhận ICE candidate từ broadcaster
 socket.on('candidate', (id, candidate) => {
   console.log('📥 Received ICE candidate from broadcaster');
   peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
+});
+
+// ✅ Đảm bảo DOM đã sẵn sàng để gán sự kiện
+window.addEventListener('DOMContentLoaded', () => {
+  if (playButton) {
+    playButton.addEventListener('click', () => {
+      if (remoteVideo.srcObject) {
+        remoteVideo.play().catch(err => {
+          console.error('🎬 Error playing video:', err);
+        });
+      } else {
+        alert('⚠️ Video stream chưa sẵn sàng!');
+      }
+    });
+  }
 });
