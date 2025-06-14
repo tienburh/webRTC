@@ -4,6 +4,7 @@ const config = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] };
 
 const remoteVideo = document.getElementById('remoteVideo');
 const playButton = document.getElementById('playButton');
+const statusText = document.getElementById('statusText');
 
 let receivedStream = null;
 
@@ -17,59 +18,56 @@ socket.on('offer', async (id, description) => {
   peerConnections[id] = pc;
 
   await pc.setRemoteDescription(description);
-  console.log('🧾 Setting remote description...');
+  console.log('🧾 Remote description set');
 
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
-  console.log('📤 Sending answer to broadcaster');
+  console.log('📤 Sending answer');
   socket.emit('answer', id, pc.localDescription);
 
   pc.ontrack = event => {
-    console.log('📺 Received remote track event.');
     const stream = event.streams[0];
     if (stream) {
-      console.log('✅ Remote stream received:', stream);
-      console.log('🎥 Remote stream tracks:', stream.getTracks());
-      console.log('🎥 Remote video tracks:', stream.getVideoTracks());
-
+      console.log('✅ Stream received:', stream);
       receivedStream = stream;
-      remoteVideo.srcObject = receivedStream;
+      remoteVideo.srcObject = stream;
 
       remoteVideo.play().then(() => {
         console.log('▶️ Video is playing automatically.');
+        statusText.textContent = "✅ Video đang phát!";
       }).catch(err => {
-        console.warn('⚠️ Không thể tự động phát video:', err);
+        console.warn('⚠️ Không thể tự động phát:', err);
+        playButton.classList.remove('hidden');
+        statusText.textContent = "🔈 Bấm Start để phát video";
       });
     } else {
-      console.warn('⚠️ Không nhận được stream từ broadcaster!');
+      console.warn('⚠️ Không có stream từ broadcaster');
+      statusText.textContent = "❌ Không có tín hiệu video!";
     }
   };
 
   pc.onicecandidate = event => {
     if (event.candidate) {
-      console.log('📤 Sending ICE candidate to broadcaster');
       socket.emit('candidate', id, event.candidate);
     }
   };
 });
 
 socket.on('candidate', (id, candidate) => {
-  console.log('📥 Received ICE candidate from broadcaster');
   peerConnections[id]?.addIceCandidate(new RTCIceCandidate(candidate));
 });
 
-window.addEventListener('DOMContentLoaded', () => {
-  if (playButton) {
-    playButton.addEventListener('click', () => {
-      if (receivedStream) {
-        remoteVideo.play().then(() => {
-          console.log('▶️ Video started manually.');
-        }).catch(err => {
-          console.error('🎬 Error playing video:', err);
-        });
-      } else {
-        alert('⚠️ Video stream chưa sẵn sàng!');
-      }
+playButton.addEventListener('click', () => {
+  if (receivedStream) {
+    remoteVideo.play().then(() => {
+      console.log('▶️ Video started manually');
+      playButton.classList.add('hidden');
+      statusText.textContent = "✅ Video đang phát!";
+    }).catch(err => {
+      console.error('🎬 Error playing video:', err);
+      statusText.textContent = "❌ Không thể phát video!";
     });
+  } else {
+    alert('⚠️ Video stream chưa sẵn sàng!');
   }
 });

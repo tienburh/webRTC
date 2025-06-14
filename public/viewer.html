@@ -6,17 +6,20 @@
   <title>Drone Cam - Viewer</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
   <style>
-    /* CSS để lật ngang video */
     #remoteVideo {
       transform: scaleX(-1);
     }
   </style>
 </head>
 <body class="bg-gray-100 flex flex-col items-center p-6">
-  <h1 class="text-3xl font-bold mb-6">Drone Camera - Viewer</h1>
+  <h1 class="text-3xl font-bold mb-4">Drone Camera - Viewer</h1>
   <video id="remoteVideo" autoplay playsinline class="w-full max-w-2xl bg-black rounded shadow"></video>
-  
-  <button id="playButton" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+
+  <!-- Trạng thái -->
+  <p id="statusText" class="text-gray-600 mt-2">🔄 Đang chờ stream từ drone...</p>
+
+  <!-- Nút Start -->
+  <button id="playButton" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 hidden">
     ▶️ Start Video
   </button>
 
