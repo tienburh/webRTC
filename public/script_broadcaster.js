@@ -18,7 +18,7 @@ window.onload = async () => {
 
   try {
     // Yêu cầu quyền truy cập camera + micro
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
     console.log('✅ Camera stream acquired');
     localVideo.srcObject = stream;
 

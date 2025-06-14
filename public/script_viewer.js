@@ -22,7 +22,7 @@ socket.on('offer', async (id, description) => {
     setTimeout(() => {
       if (!remoteVideo.srcObject) {
         console.warn('⚠️ Chưa có video stream sau 3s!');
-        alert('Không nhận được video từ broadcaster. Kiểm tra lại kết nối hoặc thử reload!');
+        alert('Không nhận được video từ broadcaster. Kiểm tra lại kế  t nối hoặc thử reload!');
       }
     }, 3000);
   };
