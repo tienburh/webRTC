@@ -1,15 +1,13 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Drone Cam - Broadcaster</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
-</head>
-<body class="bg-gray-100 flex flex-col items-center p-6">
-  <h1 class="text-3xl font-bold mb-6">Drone Camera - Streaming</h1>
-  <video id="localVideo" autoplay muted playsinline class="w-full max-w-2xl bg-black rounded shadow"></video>
+  <title>Broadcaster</title>
   <script src="/socket.io/socket.io.js"></script>
-  <script src="script_broadcaster.js"></script>
+  <script src="script_broadcaster.js" defer></script>
+</head>
+<body>
+  <h1>Drone Camera - Broadcaster</h1>
+  <video id="localVideo" autoplay muted playsinline style="width: 100%; max-width: 640px; background: black;"></video>
 </body>
 </html>
