@@ -8,37 +8,27 @@ const playButton = document.getElementById('playButton');
 let receivedStream = null;
 let streamReady = false;
 
-// 🔄 Thêm cơ chế retry watcher
-let retryCount = 0;
-const maxRetries = 5;
-const retryWatcher = () => {
-  if (retryCount >= maxRetries) return;
-  console.log(`⏳ Retry watcher ${retryCount + 1}/${maxRetries}`);
-  socket.emit('watcher');
-  retryCount++;
-  setTimeout(retryWatcher, 2000);
-};
-
+// ✅ Chờ khi broadcaster sẵn sàng thì mới gửi 'watcher'
 socket.on('broadcaster', () => {
-  console.log('📡 Broadcaster detected.');
+  console.log('📡 Broadcaster is available. Registering as watcher...');
   socket.emit('watcher');
 });
 
-retryWatcher(); // bắt đầu retry watcher sau load
+// 🔄 Fallback: nếu viewer vào trước broadcaster, tự động thử gửi watcher sau 3 giây
+setTimeout(() => {
+  socket.emit('watcher');
+  console.log('⏳ Retry sending watcher after timeout.');
+}, 3000);
 
+// 📨 Khi nhận được offer từ broadcaster
 socket.on('offer', async (id, description) => {
   console.log('📨 Received offer from broadcaster:', id);
 
   const pc = new RTCPeerConnection(config);
   peerConnections[id] = pc;
 
-  try {
-    await pc.setRemoteDescription(description);
-    console.log('🧾 Remote description set.');
-  } catch (err) {
-    console.error('❌ setRemoteDescription error:', err);
-    return;
-  }
+  await pc.setRemoteDescription(description);
+  console.log('🧾 Remote description set.');
 
   const answer = await pc.createAnswer();
   await pc.setLocalDescription(answer);
@@ -52,10 +42,11 @@ socket.on('offer', async (id, description) => {
       receivedStream = stream;
       remoteVideo.srcObject = receivedStream;
       streamReady = true;
+
       remoteVideo.play().then(() => {
         console.log('▶️ Video is playing automatically.');
       }).catch(err => {
-        console.warn('⚠️ Autoplay failed.', err);
+        console.warn('⚠️ Autoplay failed. User interaction may be required.', err);
       });
     } else {
       console.warn('⚠️ No stream received!');
@@ -70,18 +61,16 @@ socket.on('offer', async (id, description) => {
   };
 });
 
-socket.on('candidate', async (id, candidate) => {
+// 📨 Nhận ICE candidate
+socket.on('candidate', (id, candidate) => {
   console.log('📥 Received ICE candidate from broadcaster');
   const pc = peerConnections[id];
   if (pc) {
-    try {
-      await pc.addIceCandidate(new RTCIceCandidate(candidate));
-    } catch (err) {
-      console.error('❌ addIceCandidate error:', err);
-    }
+    pc.addIceCandidate(new RTCIceCandidate(candidate));
   }
 });
 
+// 🧹 Khi peer rớt
 socket.on('disconnectPeer', id => {
   console.log(`❌ Peer disconnected: ${id}`);
   const pc = peerConnections[id];
@@ -91,6 +80,7 @@ socket.on('disconnectPeer', id => {
   }
 });
 
+// ▶️ Nút start video
 window.addEventListener('DOMContentLoaded', () => {
   if (playButton) {
     playButton.addEventListener('click', () => {
