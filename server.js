@@ -26,11 +26,11 @@ io.on('connection', socket => {
   socket.on('broadcaster', () => {
     broadcaster = socket.id;
     console.log(`🎥 Broadcaster ready: ${broadcaster}`);
-    socket.broadcast.emit('broadcaster'); // thông báo cho watcher
+    socket.broadcaster.emit('broadcaster'); // thông báo cho watcher
   });
 
   // Khi viewer kết nối
-  socket.on('watcher', () => {
+  socket.on('watcher', () => { 
     console.log(`👀 Watcher connected: ${socket.id}`);
     if (broadcaster) {
       io.to(broadcaster).emit('watcher', socket.id);
@@ -65,7 +65,7 @@ io.on('connection', socket => {
       broadcaster = null;
     }
 
-    socket.broadcast.emit('disconnectPeer', socket.id);
+    socket.broadcaster.emit('disconnectPeer', socket.id);
   });
 });
 
