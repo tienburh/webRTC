@@ -19,22 +19,25 @@ socket.on('offer', async (id, description) => {
   peerConnections[id] = pc;
 
   pc.ontrack = (event) => {
-    console.log('📺 Received remote track event');
-    receivedStream = event.streams[0];
+  console.log('📺 Received remote track event');
 
-    if (receivedStream) {
-      remoteVideo.srcObject = receivedStream;
+  if (remoteVideo.srcObject !== event.streams[0]) {
+    remoteVideo.srcObject = event.streams[0];
 
+    // Đảm bảo stream đã gán xong mới gọi play
+    remoteVideo.onloadedmetadata = () => {
       remoteVideo.play().then(() => {
         console.log('▶️ Video is playing');
       }).catch(err => {
         console.warn('⚠️ Cannot autoplay video:', err);
         alert('⚠️ Trình duyệt không cho phép tự động phát video. Vui lòng nhấn nút "Start Video" nếu có.');
       });
-    } else {
-      console.warn('⚠️ Không có stream nhận được!');
-    }
+    };
+  } else {
+    console.log('⚠️ Stream đã được gán trước đó.');
+  }
   };
+
 
   pc.onicecandidate = (event) => {
     if (event.candidate) {
