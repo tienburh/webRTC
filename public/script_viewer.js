@@ -1,30 +1,30 @@
-// 👉 Kết nối đến signaling server
+// Kết nối đến signaling server
 const socket = io();
 
-// 👉 Cấu hình ICE server (giúp kết nối xuyên NAT, qua Internet)
+// Cấu hình ICE server (giúp kết nối xuyên NAT, qua Internet)
 const config = {
   iceServers: [{ urls: 'stun:stun.l.google.com:19302' }]
 };
 
-// 👉 Lưu các PeerConnection với broadcaster
+// Lưu các PeerConnection với broadcaster
 const peerConnections = {};
 
-// 👉 Tham chiếu phần tử video
+// Tham chiếu phần tử video
 const remoteVideo = document.getElementById('remoteVideo');
 let receivedStream = null;
 
-// 📡 Gửi sự kiện 'watcher' ngay khi kết nối
+// Gửi sự kiện 'watcher' ngay khi kết nối
 socket.emit('watcher');
 console.log('📡 Sent watcher signal');
 
-// 📨 Khi nhận được 'offer' từ broadcaster
+// Khi nhận được 'offer' từ broadcaster
 socket.on('offer', async (id, description) => {
   console.log('📨 Received offer from broadcaster:', id);
 
   const pc = new RTCPeerConnection(config);
   peerConnections[id] = pc;
 
-  // 📺 Khi nhận được track video từ phía broadcaster
+  // Khi nhận được track video từ phía broadcaster
   pc.ontrack = (event) => {
     console.log('📺 Received remote track event');
 
@@ -47,7 +47,7 @@ socket.on('offer', async (id, description) => {
     }
   };
 
-  // ❄️ Gửi ICE candidate khi có
+  // Gửi ICE candidate khi có
   pc.onicecandidate = (event) => {
     if (event.candidate) {
       socket.emit('candidate', id, event.candidate);
@@ -65,7 +65,7 @@ socket.on('offer', async (id, description) => {
   }
 });
 
-// 📥 Khi nhận ICE candidate từ broadcaster
+// Khi nhận ICE candidate từ broadcaster
 socket.on('candidate', (id, candidate) => {
   const pc = peerConnections[id];
   if (pc) {
@@ -75,7 +75,7 @@ socket.on('candidate', (id, candidate) => {
   }
 });
 
-// ❌ Khi broadcaster ngắt kết nối
+// Khi broadcaster ngắt kết nối
 socket.on('disconnectPeer', id => {
   console.log(`❌ Broadcaster disconnected: ${id}`);
   if (peerConnections[id]) {
@@ -84,7 +84,7 @@ socket.on('disconnectPeer', id => {
   }
 });
 
-// ▶️ Bắt sự kiện người dùng nhấn nút Play nếu autoplay bị chặn
+// Bắt sự kiện người dùng nhấn nút Play nếu autoplay bị chặn
 const playButton = document.getElementById('playButton');
 if (playButton) {
   playButton.addEventListener('click', () => {
