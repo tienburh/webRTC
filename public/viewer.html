@@ -1,15 +1,21 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Drone Cam - Viewer</title>
-  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
-</head>
-<body class="bg-gray-100 flex flex-col items-center p-6">
-  <h1 class="text-3xl font-bold mb-6">Drone Camera - Viewer</h1>
+<body>
+  <h1>Drone Camera - Viewer</h1>
   <video id="remoteVideo" autoplay playsinline class="w-full max-w-2xl bg-black rounded shadow"></video>
+  <button id="playButton">▶️ Start Video</button>
+
   <script src="/socket.io/socket.io.js"></script>
   <script src="script_viewer.js"></script>
+
+  <script>
+    // Bắt sự kiện nút nhấn nếu autoplay fail
+    document.getElementById('playButton').addEventListener('click', () => {
+      const video = document.getElementById('remoteVideo');
+      if (video.srcObject) {
+        video.play().catch(err => console.error('🎬 Error playing video:', err));
+      } else {
+        alert('⚠️ Chưa nhận được video stream từ Drone!');
+      }
+    });
+  </script>
 </body>
-</html>
+  
