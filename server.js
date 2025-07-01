@@ -33,9 +33,9 @@ io.on('connection', socket => {
     if (broadcaster) io.to(broadcaster).emit('watcher', socket.id);
   });
 
-  socket.on('offer', (id, description) => {
-    io.to(id).emit('offer', socket.id, description);
-  });
+  socket.on('offer', ({ id, description }) => {
+  io.to(id).emit('offer', socket.id, description);
+});
 
   socket.on('answer', (id, description) => {
     io.to(id).emit('answer', socket.id, description);

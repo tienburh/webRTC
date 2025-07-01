@@ -92,8 +92,10 @@ async def watcher(watcher_id):
     # Create and send offer
     offer = await pc.createOffer()
     await pc.setLocalDescription(offer)
-    await sio.emit("offer", watcher_id, sdp_to_dict(pc.localDescription))
-
+    await sio.emit("offer", {
+    "id": watcher_id,
+    "description": sdp_to_dict(pc.localDescription)
+})
 
 @sio.event
 async def answer(watcher_id, description):
