@@ -1,78 +1,60 @@
-// Import cac thu vien can thiet
+// server.js
 const express  = require('express');
 const http     = require('http');
 const path     = require('path');
 const socketIO = require('socket.io');
 
-const app    = express(); // Tao ung dung Express
-const server = http.createServer(app); // Tao HTTP server tu Express
-const io     = socketIO(server); // Khoi tao Socket.IO de gan voi HTTP server (giao tiep WebSocket giua client va server)
+const app    = express();
+const server = http.createServer(app);
+const io     = socketIO(server, { cors: { origin: '*' } });
 
-
-// Phuc vu cac file tinh trong thu muc "public"
+// 1) Chỉ serve thư mục public
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Duong dan chinh tra ve index.html
+// 2) Khi người dùng vào '/', trả về public/viewer.html
 app.get('/', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'viewer.html'));
 });
 
+let broadcaster;
 
-let broadcaster;  // Luu lai socket ID cua broadcaster hien tai
-
+// --- phần signaling giống y hệt trước ---
 io.on('connection', socket => {
   console.log(`🔌 New connection: ${socket.id}`);
 
   socket.on('broadcaster', () => {
-    broadcaster = socket.id;  // Luu socket ID cua broadcaster
+    broadcaster = socket.id;
     console.log(`🎥 Broadcaster ready: ${broadcaster}`);
-
-    // Gui thong bao cho tat ca cac watcher dang ket noi rang broadcaster da san sang
     socket.broadcast.emit('broadcaster');
   });
 
-
   socket.on('watcher', () => {
     console.log(`👀 Watcher connected: ${socket.id}`);
-    if (broadcaster) {
-      // Gui su kien den broadcaster voi ID cua watcher
-      io.to(broadcaster).emit('watcher', socket.id);
-    } else {
-      console.log('⚠ No broadcaster found when watcher connected.');
-    }
+    if (broadcaster) io.to(broadcaster).emit('watcher', socket.id);
   });
 
-
   socket.on('offer', (id, description) => {
-    console.log(`📨 Offer from ${socket.id} to ${id}`);
-    socket.to(id).emit('offer', socket.id, description);
+    io.to(id).emit('offer', socket.id, description);
   });
 
   socket.on('answer', (id, description) => {
-    console.log(`📨 Answer from ${socket.id} to ${id}`);
-    socket.to(id).emit('answer', socket.id, description);
+    io.to(id).emit('answer', socket.id, description);
   });
 
   socket.on('candidate', (id, candidate) => {
-    console.log(`📨 ICE candidate from ${socket.id} to ${id}`);
-    socket.to(id).emit('candidate', socket.id, candidate);
+    io.to(id).emit('candidate', socket.id, candidate);
   });
 
   socket.on('disconnect', () => {
     console.log(`❌ Disconnected: ${socket.id}`);
-
-    // Neu broadcaster roi di, reset bien
     if (socket.id === broadcaster) {
       broadcaster = null;
-      console.log('⚠ Broadcaster disconnected.');
+      console.log('⚠️  Broadcaster disconnected.');
     }
-
-    // Thong bao cho cac client con lai rang mot peer da roi khoi
     socket.broadcast.emit('disconnectPeer', socket.id);
   });
 });
 
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-  console.log(`\n✅ Server is running! Access it at: https://webrtc-qlql.onrender.com//\n`);
-});
+server.listen(PORT, () =>
+  console.log(`✅ Server running at http://localhost:${PORT}`));
