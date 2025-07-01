@@ -1,134 +1,93 @@
-import argparse
 import asyncio
 import cv2
-import socketio
-from aiortc import (
-    RTCPeerConnection,
-    RTCSessionDescription,
-    RTCIceCandidate,
-    VideoStreamTrack,
-    RTCConfiguration,
-    RTCIceServer
-)
-from aiortc.contrib.media import MediaRelay
+from aiortc import RTCPeerConnection, RTCSessionDescription, VideoStreamTrack, RTCIceCandidate
 from av import VideoFrame
+import socketio
 
-# Parse command-line arguments
-parser = argparse.ArgumentParser(description="Python WebRTC Broadcaster")
-parser.add_argument(
-    "--signaling",
-    default="http://localhost:3000",
-    help="URL của signaling server (ví dụ: http://127.0.0.1:3000 hoặc https://example.com)"
-)
-args = parser.parse_args()
-SIGNALING_SERVER = args.signaling
-
-# ICE server config
-ICE_SERVERS = [RTCIceServer(urls="stun:stun.l.google.com:19302")]
-relay = MediaRelay()
+sio = socketio.AsyncClient()
 pcs = {}
 
-# Socket.IO client
-sio = socketio.AsyncClient()
-
-
-class CameraTrack(VideoStreamTrack):
+class CameraVideoTrack(VideoStreamTrack):
     def __init__(self):
         super().__init__()
         self.cap = cv2.VideoCapture(0)
-        if not self.cap.isOpened():
-            raise RuntimeError("Không mở được camera!")
+        self.cap.set(cv2.CAP_PROP_BUFFERSIZE, 1)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 360)
 
     async def recv(self):
         pts, time_base = await self.next_timestamp()
         ret, frame = self.cap.read()
         if not ret:
-            raise RuntimeError("Không đọc được frame từ camera!")
+            return None
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        video_frame = VideoFrame.from_ndarray(frame, format='rgb24')
+        video_frame = VideoFrame.from_ndarray(frame, format="rgb24")
         video_frame.pts = pts
         video_frame.time_base = time_base
         return video_frame
 
+video_track = CameraVideoTrack()
 
-# Utility: convert RTCSessionDescription to dict
-def sdp_to_dict(desc):
-    return {
-        "sdp": desc.sdp,
-        "type": desc.type
-    }
-
-
-# Utility: convert ICECandidate to dict
-def candidate_to_dict(candidate):
-    return {
-        "candidate": candidate.candidate,
-        "sdpMid": candidate.sdpMid,
-        "sdpMLineIndex": candidate.sdpMLineIndex
-    }
-
+def sdp_to_dict(sdp):
+    return {"sdp": sdp.sdp, "type": sdp.type}
 
 @sio.event
 async def connect():
-    print(f"🔗 Đã kết nối đến signaling server tại {SIGNALING_SERVER}")
+    print("🔗 Đã kết nối đến signaling server tại http://localhost:3000")
     await sio.emit("broadcaster")
 
-
-@sio.event
-async def watcher(watcher_id):
-    print("👀 Watcher connected:", watcher_id)
-    config = RTCConfiguration(iceServers=ICE_SERVERS)
-    pc = RTCPeerConnection(configuration=config)
+@sio.on("watcher")
+async def on_watcher(watcher_id):
+    print(f"👀 Watcher connected: {watcher_id}")
+    pc = RTCPeerConnection()
     pcs[watcher_id] = pc
 
-    cam_track = CameraTrack()
-    pc.addTrack(relay.subscribe(cam_track))
-
     @pc.on("icecandidate")
-    async def on_ice(event):
+    async def on_icecandidate(event):
         if event.candidate:
-            await sio.emit("candidate", watcher_id, candidate_to_dict(event.candidate))
+            await sio.emit("candidate", {
+                "id": watcher_id,
+                "candidate": {
+                    "sdpMid": event.candidate.sdpMid,
+                    "sdpMLineIndex": event.candidate.sdpMLineIndex,
+                    "candidate": event.candidate.candidate
+                }
+            })
 
-    # Create and send offer
-    offer = await pc.createOffer()
-    await pc.setLocalDescription(offer)
+    pc.addTrack(video_track)
+    await pc.setLocalDescription(await pc.createOffer())
     await sio.emit("offer", {
-    "id": watcher_id,
-    "description": sdp_to_dict(pc.localDescription)
-})
+        "id": watcher_id,
+        "description": sdp_to_dict(pc.localDescription)
+    })
+
+@sio.on("answer")
+async def on_answer(data):
+    pc = pcs.get(data["id"])
+    if pc:
+        desc = RTCSessionDescription(**data["description"])
+        await pc.setRemoteDescription(desc)
+        print(f"📨 Received answer from {data['id']}")
+
+@sio.on("candidate")
+async def on_candidate(data):
+    pc = pcs.get(data["id"])
+    if pc:
+        c = data["candidate"]
+        candidate = RTCIceCandidate(
+            sdpMid=c["sdpMid"],
+            sdpMLineIndex=c["sdpMLineIndex"],
+            candidate=c["candidate"]
+        )
+        await pc.addIceCandidate(candidate)
 
 @sio.event
-async def answer(watcher_id, description):
-    print("📨 Received answer from", watcher_id)
-    pc = pcs.get(watcher_id)
-    if pc:
-        await pc.setRemoteDescription(RTCSessionDescription(**description))
-
-
-@sio.event
-async def candidate(peer_id, candidate):
-    pc = pcs.get(peer_id)
-    if pc:
-        await pc.addIceCandidate(RTCIceCandidate(**candidate))
-
-
-@sio.event
-async def disconnectPeer(peer_id):
-    print("❌ Viewer disconnected:", peer_id)
-    pc = pcs.pop(peer_id, None)
-    if pc:
-        await pc.close()
-
+async def disconnect():
+    print("❌ Disconnected from signaling server")
 
 async def main():
-    try:
-        await sio.connect(SIGNALING_SERVER)
-    except Exception as e:
-        print(f"⚠️ Không thể kết nối đến signaling server: {e}")
-        return
-    print("🚀 Broadcaster is streaming …")
+    await sio.connect("http://localhost:3000")
     await sio.wait()
-
 
 if __name__ == "__main__":
     asyncio.run(main())

@@ -1,29 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <link rel="icon" href="data:,">
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Drone Cam - Viewer</title>
   <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet" />
   <style>
-    #remoteVideo {
-      transform: scaleX(-1);
-    }
+    #remoteVideo { transform: scaleX(-1); }
   </style>
 </head>
 <body class="bg-gray-200 flex items-center justify-center min-h-screen flex-col space-y-4">
-
-  <video id="remoteVideo" autoplay playsinline
-         class="w-full max-w-2xl bg-black rounded-2xl shadow-lg"></video>
-
-  <button id="playButton"
-          class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">
-    ▶️ Start Video
-  </button>
-
-  <!-- Load Socket.IO + viewer script -->
+  <video id="remoteVideo" autoplay playsinline class="w-full max-w-2xl bg-black rounded-2xl shadow-lg"></video>
+  <button id="playButton" class="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition">▶️ Start Video</button>
   <script src="/socket.io/socket.io.js"></script>
   <script src="script_viewer.js"></script>
+  <script>
+    document.getElementById('playButton').addEventListener('click', () => {
+      const video = document.getElementById('remoteVideo');
+      if (video.srcObject) {
+        video.play().catch(err => console.error('🎬 Error playing video:', err));
+      } else {
+        alert('⚠️ Chưa nhận được video stream từ Drone!');
+      }
+    });
+  </script>
 </body>
 </html>
