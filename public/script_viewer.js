@@ -5,6 +5,8 @@ const config = {
 const peerConnections = {};
 const remoteVideo = document.getElementById('remoteVideo');
 
+console.log("✅ script_viewer.js loaded");
+
 // Chờ broadcaster xuất hiện mới gửi watcher
 socket.on('broadcaster', () => {
   console.log('📡 Broadcaster available -> gửi watcher');
